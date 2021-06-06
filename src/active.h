@@ -1,36 +1,68 @@
+//------------------------------------------------------------------------------
+/**
+ * @license
+ * Copyright (c) Daniel Pauli <dapaulid@gmail.com>
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+//------------------------------------------------------------------------------
+#pragma once
+
+//------------------------------------------------------------------------------
+// includes
+//------------------------------------------------------------------------------
+//
+// project
+#include "shared_queue.h"
+//
+// C++ 
 #include <functional>
 #include <future>
 
-#include "queue.h"
+//------------------------------------------------------------------------------
+//
+namespace active {
 
-class Command {
+//------------------------------------------------------------------------------
+// class definition
+//------------------------------------------------------------------------------
+//
+class command {
 public:
-	virtual ~Command() {}
+	virtual ~command() {}
 	virtual void execute() = 0;
 };
 
-class ActiveObject {
+//------------------------------------------------------------------------------
+// class definition
+//------------------------------------------------------------------------------
+//
+class object {
 public:
 	void action() {
 		// TODO use unique ptr?
-		Command* cmd = m_queue.get();
+		command* cmd = m_queue.get();
 		cmd->execute();
 	}
-	void enqueue(Command* a_cmd) {
+	void enqueue(command* a_cmd) {
 		m_queue.put(std::move(a_cmd));
 	}
 public:
-	Queue<Command*> m_queue;
+	shared_queue<command*> m_queue;
 };
 
-
+//------------------------------------------------------------------------------
+// class definition
+//------------------------------------------------------------------------------
+//
 template< class Object, class Ret, class... Args >
-class OuterFunc {
+class outer_func {
 public:
 
-	using InnerFunc = Ret (Object::*)(Args...);
+	using inner_func = Ret (Object::*)(Args...);
 
-	OuterFunc(Object* a_obj, InnerFunc a_func) {
+	outer_func(Object* a_obj, inner_func a_func) {
 		m_obj = a_obj;
 		m_func = a_func;
 	}
@@ -40,7 +72,7 @@ public:
 	}
 
 	std::future<Ret> call_async(Args... args) {
-		Call* call = new Call();
+		call_command* call = new call_command();
 		call->func = std::bind(m_func, m_obj, args...);
 		std::future<Ret> res = call->promise.get_future();
 		m_obj->enqueue(std::move(call));
@@ -49,7 +81,7 @@ public:
 
 protected:
 	// helper class for pending call
-	class Call: public Command {
+	class call_command: public command {
 	public:
 		virtual void execute() override {
 			promise.set_value(func());
@@ -61,14 +93,14 @@ protected:
 
 protected:
 	Object* m_obj;
-	InnerFunc m_func;
+	inner_func m_func;
 
 };
 
 
 // helper class for pending call
 template<class Ret>
-class DeferredCall: public Command {
+class deferred_call: public command {
 public:
 	virtual void execute() override {
 		func();
@@ -81,13 +113,17 @@ public:
 	std::promise<Ret> promise;
 };
 
+//------------------------------------------------------------------------------
+// class definition
+//------------------------------------------------------------------------------
+//
 template< class Object, class Ret, class... Args >
-class DeferFunc {
+class defer_func {
 public:
 
-	using InnerFunc = void (Object::*)(DeferredCall<Ret>*, Args...);
+	using inner_func = void (Object::*)(deferred_call<Ret>*, Args...);
 
-	DeferFunc(Object* a_obj, InnerFunc a_func) {
+	defer_func(Object* a_obj, inner_func a_func) {
 		m_obj = a_obj;
 		m_func = a_func;
 	}
@@ -97,7 +133,7 @@ public:
 	}
 
 	std::future<Ret> call_async(Args... args) {
-		DeferredCall<Ret>* call = new DeferredCall<Ret>();
+		deferred_call<Ret>* call = new deferred_call<Ret>();
 		call->func = std::bind(m_func, m_obj, call, args...);
 		std::future<Ret> res = call->promise.get_future();
 		m_obj->enqueue(std::move(call));
@@ -107,6 +143,13 @@ public:
 
 protected:
 	Object* m_obj;
-	InnerFunc m_func;
+	inner_func m_func;
 
 };
+
+//------------------------------------------------------------------------------
+//
+} // end namespace active
+
+//------------------------------------------------------------------------------
+// end of file
