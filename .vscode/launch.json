@@ -2,17 +2,18 @@
 	"version": "0.2.0",
 	"configurations": [
 	  {
-		"name": "build and debug active file",
+		"name": "build and debug",
 		"type": "cppvsdbg",
 		"request": "launch",
-		"program": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+		//"program": "${fileDirname}\\${fileBasenameNoExtension}.exe",
+		"program": "example\\example.exe",
 		"args": [],
 		"stopAtEntry": false,
 		"cwd": "${workspaceFolder}",
 		"environment": [],
 		"externalConsole": false,
 		"internalConsoleOptions": "openOnSessionStart",
-		"preLaunchTask": "build active file"
+		"preLaunchTask": "build"
 	  }
 	]
   }

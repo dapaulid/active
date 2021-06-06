@@ -3,15 +3,9 @@
 	"tasks": [
 	  {
 		"type": "shell",
-		"label": "build active file",
+		"label": "build",
 		"command": "build.bat",
-		"args": [
-		  "/Zi",
-		  "/EHsc",
-		  "/Fe:",
-		  "${fileDirname}\\${fileBasenameNoExtension}.exe",
-		  "${file}"
-		],
+		"args": [],
 		"problemMatcher": ["$msCompile"],
 		"group": {
 		  "kind": "build",
