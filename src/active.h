@@ -17,12 +17,84 @@
 #include "shared_queue.h"
 //
 // C++ 
+#include <thread>
 #include <functional>
 #include <future>
 
 //------------------------------------------------------------------------------
 //
 namespace active {
+
+template<typename F, typename R>
+void set_promise(std::promise<R> & p, F && f) //handle non-void here
+{
+    p.set_value(f()); 
+}
+
+template<typename F>
+void set_promise(std::promise<void> & p, F && f)  //handle void here
+{
+    f();
+    p.set_value(); 
+}
+
+//------------------------------------------------------------------------------
+// class definition
+//------------------------------------------------------------------------------
+//
+template< class Object, class Ret, class... Args >
+class outer_func {
+public:
+
+	using inner_func = Ret (Object::*)(Args...);
+
+	outer_func(Object* a_obj, inner_func a_func) {
+		m_obj = a_obj;
+		m_func = a_func;
+	}
+
+	// TODO perfect forwarding??? issues with string conversion
+	Ret operator()(Args... args) {
+		return call_async(std::forward<Args>(args)...).get();
+	}
+
+	// TODO perfect forwarding??? issues with string conversion
+	std::future<Ret> call_async(Args... args) {
+		// create pending call 
+		call_command* call = new call_command(
+			std::bind(m_func, m_obj, std::forward<Args>(args)...)
+		);
+		// get future so that handler can wait for completion
+		std::future<Ret> res = call->get_future();
+		// add it to our queue for execution
+		m_obj->enqueue(call);
+		// done
+		return res;
+	}
+
+protected:
+	// helper class for pending call
+	class call_command: public command {
+	public:
+		call_command(std::function<Ret()>&& a_func):
+			m_func(a_func) {}
+		virtual void execute() override {
+			set_promise(m_promise, m_func);
+			delete this;
+		}
+		std::future<Ret> get_future() {
+			return m_promise.get_future();
+		}
+	private:
+		std::function<Ret()> m_func;
+		std::promise<Ret> m_promise;
+	};
+
+protected:
+	Object* m_obj;
+	inner_func m_func;
+
+};
 
 //------------------------------------------------------------------------------
 // class definition
@@ -40,65 +112,52 @@ public:
 //
 class object {
 public:
-	void action() {
-		// TODO use unique ptr?
-		command* cmd = m_queue.get();
-		cmd->execute();
+	object():
+		m_thread(&object::action, this)
+	{
+		startup();
 	}
+	~object()
+	{
+		shutdown();
+		m_thread.join();
+	}	
+	
 	void enqueue(command* a_cmd) {
 		m_queue.put(std::move(a_cmd));
 	}
-public:
+
+protected:
+	virtual void i_startup() {
+		m_is_active = true;
+	}
+
+	virtual void i_shutdown() {
+		m_is_active = false;
+	}	
+
+private:
+	void action() {
+		do {
+			command* cmd = m_queue.get();
+			cmd->execute();
+		} while (m_is_active);
+	}
+
+	outer_func<object, void> startup { this, &object::i_startup };
+	outer_func<object, void> shutdown { this, &object::i_shutdown };
+
+protected:
 	shared_queue<command*> m_queue;
+	std::thread m_thread;
+	bool m_is_active = false;
 };
+
 
 //------------------------------------------------------------------------------
 // class definition
 //------------------------------------------------------------------------------
 //
-template< class Object, class Ret, class... Args >
-class outer_func {
-public:
-
-	using inner_func = Ret (Object::*)(Args...);
-
-	outer_func(Object* a_obj, inner_func a_func) {
-		m_obj = a_obj;
-		m_func = a_func;
-	}
-
-	Ret operator()(Args... args) {
-		return call_async(...args).get();
-	}
-
-	std::future<Ret> call_async(Args... args) {
-		call_command* call = new call_command();
-		call->func = std::bind(m_func, m_obj, args...);
-		std::future<Ret> res = call->promise.get_future();
-		m_obj->enqueue(std::move(call));
-		return res;
-	}
-
-protected:
-	// helper class for pending call
-	class call_command: public command {
-	public:
-		virtual void execute() override {
-			promise.set_value(func());
-			delete this;
-		}
-		std::function<Ret()> func;
-		std::promise<Ret> promise;
-	};
-
-protected:
-	Object* m_obj;
-	inner_func m_func;
-
-};
-
-
-// helper class for pending call
 template<class Ret>
 class deferred_call: public command {
 public:

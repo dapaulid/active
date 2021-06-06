@@ -50,6 +50,10 @@
 		"xstring": "cpp",
 		"xtr1common": "cpp",
 		"xutility": "cpp",
-		"xxatomic": "cpp"
+		"xxatomic": "cpp",
+		"deque": "cpp",
+		"queue": "cpp",
+		"sstream": "cpp",
+		"string": "cpp"
 	}
 }
