@@ -32,19 +32,6 @@
 //
 namespace active {
 
-template<typename F, typename R>
-void set_promise(std::promise<R> & p, F && f) //handle non-void here
-{
-    p.set_value(f()); 
-}
-
-template<typename F>
-void set_promise(std::promise<void> & p, F && f)  //handle void here
-{
-    f();
-    p.set_value(); 
-}
-
 //------------------------------------------------------------------------------
 // class definition
 //------------------------------------------------------------------------------
@@ -69,7 +56,7 @@ public:
 	std::future<Ret> call_async(Args... args) {
 		// create pending call 
 		call_command* call = new call_command(
-			m_obj, m_func, std::make_tuple(m_obj, args...)
+			m_func, std::make_tuple(m_obj, args...)
 		);
 		// get future so that handler can wait for completion
 		std::future<Ret> res = call->get_future();
@@ -83,8 +70,8 @@ protected:
 	// helper class for pending call
 	class call_command: public command {
 	public:
-		call_command(Object* a_obj, inner_func a_func, std::tuple<Object*, Args...> a_args):
-			m_obj(a_obj), m_func(a_func), m_args(a_args) {}
+		call_command(inner_func a_func, std::tuple<Object*, Args...> a_args):
+			m_func(a_func), m_args(a_args) {}
 		virtual void execute() override {
 			i_execute(m_promise);
 			delete this;
@@ -104,7 +91,6 @@ protected:
 			m_promise.set_value();
 		}		
 	private:
-		Object* m_obj;
 		inner_func m_func;	
 		std::tuple<Object*, Args...> m_args;
 		std::promise<Ret> m_promise;
