@@ -9,6 +9,13 @@
 //------------------------------------------------------------------------------
 #pragma once
 
+/**
+ * This code requires C++17 for the following reasons:
+ * 
+ * - use of std::apply()
+ * 
+ */
+
 //------------------------------------------------------------------------------
 // includes
 //------------------------------------------------------------------------------
@@ -62,7 +69,7 @@ public:
 	std::future<Ret> call_async(Args... args) {
 		// create pending call 
 		call_command* call = new call_command(
-			std::bind(m_func, m_obj, std::forward<Args>(args)...)
+			m_obj, m_func, std::make_tuple(m_obj, args...)
 		);
 		// get future so that handler can wait for completion
 		std::future<Ret> res = call->get_future();
@@ -76,17 +83,30 @@ protected:
 	// helper class for pending call
 	class call_command: public command {
 	public:
-		call_command(std::function<Ret()>&& a_func):
-			m_func(a_func) {}
+		call_command(Object* a_obj, inner_func a_func, std::tuple<Object*, Args...> a_args):
+			m_obj(a_obj), m_func(a_func), m_args(a_args) {}
 		virtual void execute() override {
-			set_promise(m_promise, m_func);
+			i_execute(m_promise);
 			delete this;
 		}
 		std::future<Ret> get_future() {
 			return m_promise.get_future();
 		}
 	private:
-		std::function<Ret()> m_func;
+		// helpers to differentiate between void and non-void promises
+		template<typename non_void>
+		void i_execute(std::promise<non_void>&) {
+			Ret ret = std::apply(m_func, m_args);
+			m_promise.set_value(ret);
+		}
+		void i_execute(std::promise<void>&) {
+			std::apply(m_func, m_args);
+			m_promise.set_value();
+		}		
+	private:
+		Object* m_obj;
+		inner_func m_func;	
+		std::tuple<Object*, Args...> m_args;
 		std::promise<Ret> m_promise;
 	};
 
@@ -146,7 +166,7 @@ protected:
 	class finalizer {
 	public:
 		~finalizer() {
-			std::cout << "hello from finalizer" << std::endl;
+			std::cout << "hello from finalizer " << std::endl;
 			m_obj->run();
 		}
 		void set_object(object* a_obj) {
