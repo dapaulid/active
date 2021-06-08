@@ -106,23 +106,28 @@ public:
 	virtual void execute() = 0;
 };
 
+#include <iostream>
+
 //------------------------------------------------------------------------------
 // class definition
 //------------------------------------------------------------------------------
 //
 class object {
+protected:
+	class finalizer;
 public:
-	object():
-		m_thread(&object::action, this)
-	{
-		startup();
+	
+	object(finalizer& a_finalizer = finalizer()) {
+		std::cout << "hello from object" << std::endl;
+		// this will call actually run the thread as soon as the
+		// constructor completes
+		a_finalizer.set_object(this);
 	}
-	~object()
-	{
+	~object() {
 		shutdown();
 		m_thread.join();
-	}	
-	
+	}
+
 	void enqueue(command* a_cmd) {
 		m_queue.put(std::move(a_cmd));
 	}
@@ -134,7 +139,22 @@ protected:
 
 	virtual void i_shutdown() {
 		m_is_active = false;
-	}	
+	}
+
+protected:
+
+	class finalizer {
+	public:
+		~finalizer() {
+			std::cout << "hello from finalizer" << std::endl;
+			m_obj->run();
+		}
+		void set_object(object* a_obj) {
+			m_obj = a_obj;
+		}
+	private:
+		object* m_obj = nullptr;
+	};
 
 private:
 	void action() {
@@ -142,6 +162,11 @@ private:
 			command* cmd = m_queue.get();
 			cmd->execute();
 		} while (m_is_active);
+	}
+
+	void run() {
+		m_thread = std::thread(&object::action, this);
+		startup();
 	}
 
 	outer_func<object, void> startup { this, &object::i_startup };

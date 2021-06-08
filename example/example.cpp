@@ -9,6 +9,12 @@ struct sync_cout: public std::ostringstream {
 };
 
 class MyActiveObject: public active::object {
+public:
+	MyActiveObject(finalizer& a_finalizer = finalizer())
+		: active::object(a_finalizer)
+	{
+		sync_cout() << "hello from MyActiveObject" << std::endl;
+	}
 
 // outer functions (called by other threads)
 public:
