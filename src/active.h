@@ -32,6 +32,19 @@
 //
 namespace active {
 
+template<class... Args>
+struct pack {
+};
+
+template<class Object, class Ret, class... Args>
+Object get_object(Ret (Object::*)(Args...));
+
+template<class Object, class Ret, class... Args>
+Ret get_ret(Ret (Object::*)(Args...));
+
+template<class Object, class Ret, class... Args>
+pack<Args...> get_args(Ret (Object::*)(Args...));
+
 //------------------------------------------------------------------------------
 // class definition
 //------------------------------------------------------------------------------
@@ -39,6 +52,10 @@ namespace active {
 template< class Object, class Ret, class... Args >
 class outer_func {
 public:
+
+	//using Object = decltype(get_object(inner_func()));
+	//using Ret = decltype(get_ret(inner_func()));
+	//using ArgsPack = decltype(get_args(inner_func()));
 
 	using inner_func = Ret (Object::*)(Args...);
 
