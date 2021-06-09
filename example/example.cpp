@@ -5,7 +5,15 @@
 
 // helper class to synchronize output to stdout
 struct sync_cout: public std::ostringstream {
-    ~sync_cout() { std::cout << std::this_thread::get_id() << " " << str(); std::cout.flush(); }
+	sync_cout() {
+		// start message with thread id
+		*this << "[T:" << std::this_thread::get_id() << "] ";
+	}
+    ~sync_cout() { 
+		// output buffered message
+		std::cout << str(); 
+		std::cout.flush();
+	}
 };
 
 class MyActiveObject: public active::object {
@@ -40,40 +48,48 @@ protected:
 };
 
 class Main: public active::object {
+	using super = active::object;
+	
 public:
 	Main(finalizer& a_finalizer = finalizer())
-		: active::object(a_finalizer)
+		: super(a_finalizer)
 	{
 		sync_cout() << "hello from Main" << std::endl;
 	}
+
 protected:
 	virtual void i_startup() override {
 
 		// call base
-		active::object::i_startup();
+		super::i_startup();
 
+		// create object with thread that handles our calls
 		MyActiveObject obj;
-		std::stringstream msg;
 
 		// synchronous call
 		int res = obj.fritzli(111, "hello world");
 		sync_cout() << "fritzli returned " << res << std::endl;
 
-		// asynchronous calls
+		// asynchronous calls using futures
 		std::future<int> fritzli_res = obj.fritzli.call_async(222, "gugus");
 		std::future<int> hansli_res = obj.hansli.call_async(333, "dada");
 		sync_cout() << "fritzli result: " << fritzli_res.get() << std::endl;
 		sync_cout() << "hansli result: " << hansli_res.get() << std::endl;
 
-		obj.fritzli.call_async(500, "gugus2", cb([](int result){
+		// asynchronous call using callback
+		int local_var = 101;
+		obj.fritzli.call_async(500, "gugus2", cb([local_var](int result){
+			sync_cout() << "local_foo: " << local_var << std::endl;
 			sync_cout() << "fritzli2 result: " << result << std::endl;
 		}));
+
+		sync_cout() << "main done " << std::endl;
 	}
 };
 
 int main() {
 	
-	Main m;
+	Main main;
 
 	return 0;
 }
