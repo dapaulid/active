@@ -110,6 +110,17 @@ public:
 		return res;
 	}
 
+	// TODO perfect forwarding??? issues with string conversion
+	template<typename F>
+	void call_async(Args... args, callback<F> a_callback) {
+		// create pending call 
+		command* call = new callback_command<F>(
+			m_func, std::make_tuple(m_obj, args...), a_callback
+		);
+		// add it to our queue for execution
+		m_obj->enqueue(call);
+	}	
+
 protected:
 	// helper class for pending call
 	class call_command: public command {
@@ -140,44 +151,11 @@ protected:
 		std::promise<Ret> m_promise;
 	};
 
-protected:
-	Object* m_obj;
-	inner_func m_func;
-
-};
-
-//------------------------------------------------------------------------------
-// class definition
-//------------------------------------------------------------------------------
-//
-template< class Object, class Ret, class... Args >
-class async_func {
-public:
-
-	using inner_func = Ret (Object::*)(Args...);
-
-	async_func(Object* a_obj, inner_func a_func) {
-		m_obj = a_obj;
-		m_func = a_func;
-	}
-
-	// TODO perfect forwarding??? issues with string conversion
+	// helper class for pending call that expects a callback
 	template<typename F>
-	void operator()(Args... args, callback<F> a_callback) {
-		// create pending call 
-		call_command<F>* call = new call_command<F>(
-			m_func, std::make_tuple(m_obj, args...), a_callback
-		);
-		// add it to our queue for execution
-		m_obj->enqueue(call);
-	}
-
-protected:
-	// helper class for pending call
-	template<typename F>
-	class call_command: public command {
+	class callback_command: public command {
 	public:
-		call_command(inner_func a_func, std::tuple<Object*, Args...> a_args, callback<F> a_callback):
+		callback_command(inner_func a_func, std::tuple<Object*, Args...> a_args, callback<F> a_callback):
 			m_func(a_func), m_args(a_args), m_callback(a_callback) {}
 		virtual void execute() override {
 			Ret ret = std::apply(m_func, m_args);
@@ -193,7 +171,7 @@ protected:
 		callback<F> m_callback;
 	};
 
-	// helper class for reply
+	// helper class for invoking a callback on the originating object
 	template<typename F>
 	class reply_command: public command {
 	public:

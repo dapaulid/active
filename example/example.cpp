@@ -21,8 +21,6 @@ public:
 	active::outer_func<MyActiveObject, int, int, const char*> fritzli{this, &MyActiveObject::i_fritzli};
 	active::defer_func<MyActiveObject, int, int, const char*> hansli{this, &MyActiveObject::i_hansli};
 
-	active::async_func<MyActiveObject, int, int, const char*> fritzli2{this, &MyActiveObject::i_fritzli};
-
 // inner functions (called by our own thread)
 protected:
 	int i_fritzli(int a, const char* b)
@@ -40,10 +38,6 @@ protected:
 	}
 
 };
-
-void fuck(int) {
-	
-}
 
 class Main: public active::object {
 public:
@@ -71,7 +65,7 @@ protected:
 		sync_cout() << "fritzli result: " << fritzli_res.get() << std::endl;
 		sync_cout() << "hansli result: " << hansli_res.get() << std::endl;
 
-		obj.fritzli2(500, "gugus2", cb([](int result){
+		obj.fritzli.call_async(500, "gugus2", cb([](int result){
 			sync_cout() << "fritzli2 result: " << result << std::endl;
 		}));
 	}
