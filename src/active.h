@@ -46,6 +46,33 @@ template<class Object, class Ret, class... Args>
 pack<Args...> get_args(Ret (Object::*)(Args...));
 
 //------------------------------------------------------------------------------
+// forward declarations
+//------------------------------------------------------------------------------
+//
+class object;
+
+//------------------------------------------------------------------------------
+// class definition
+//------------------------------------------------------------------------------
+//
+template<class F>
+class callback {
+public:
+	callback(object* a_obj, F& a_func):
+		m_obj(a_obj), m_func(a_func) {}
+
+	template<class Ret>
+	void operator()(Ret result) {
+		m_func(result);
+	}
+
+	object* get_obj() { return m_obj; }
+private:
+	object* m_obj;
+	F m_func;
+};
+
+//------------------------------------------------------------------------------
 // class definition
 //------------------------------------------------------------------------------
 //
@@ -123,6 +150,75 @@ protected:
 // class definition
 //------------------------------------------------------------------------------
 //
+template< class Object, class Ret, class... Args >
+class async_func {
+public:
+
+	using inner_func = Ret (Object::*)(Args...);
+
+	async_func(Object* a_obj, inner_func a_func) {
+		m_obj = a_obj;
+		m_func = a_func;
+	}
+
+	// TODO perfect forwarding??? issues with string conversion
+	template<typename F>
+	void operator()(Args... args, callback<F> a_callback) {
+		// create pending call 
+		call_command<F>* call = new call_command<F>(
+			m_func, std::make_tuple(m_obj, args...), a_callback
+		);
+		// add it to our queue for execution
+		m_obj->enqueue(call);
+	}
+
+protected:
+	// helper class for pending call
+	template<typename F>
+	class call_command: public command {
+	public:
+		call_command(inner_func a_func, std::tuple<Object*, Args...> a_args, callback<F> a_callback):
+			m_func(a_func), m_args(a_args), m_callback(a_callback) {}
+		virtual void execute() override {
+			Ret ret = std::apply(m_func, m_args);
+			// return to sender
+			// TODO make sure object still exists!
+			m_callback.get_obj()->enqueue(new reply_command<F>(ret, m_callback));
+			delete this;
+		}
+
+	private:
+		inner_func m_func;	
+		std::tuple<Object*, Args...> m_args;
+		callback<F> m_callback;
+	};
+
+	// helper class for reply
+	template<typename F>
+	class reply_command: public command {
+	public:
+		reply_command(Ret a_result, callback<F> a_callback):
+			m_result(a_result), m_callback(a_callback) {}
+		virtual void execute() override {
+			m_callback(m_result);
+			delete this;
+		}
+
+	private:
+		Ret m_result;	
+		callback<F> m_callback;
+	};	
+
+protected:
+	Object* m_obj;
+	inner_func m_func;
+
+};
+
+//------------------------------------------------------------------------------
+// class definition
+//------------------------------------------------------------------------------
+//
 class command {
 public:
 	virtual ~command() {}
@@ -138,10 +234,10 @@ public:
 class object {
 protected:
 	class finalizer;
+
 public:
 	
 	object(finalizer& a_finalizer = finalizer()) {
-		std::cout << "hello from object" << std::endl;
 		// this will call actually run the thread as soon as the
 		// constructor completes
 		a_finalizer.set_object(this);
@@ -164,12 +260,16 @@ protected:
 		m_is_active = false;
 	}
 
+	template<class F>
+	callback<F> cb(F& a_func) {
+		return callback<F>(this, a_func);
+	}
+
 protected:
 
 	class finalizer {
 	public:
 		~finalizer() {
-			std::cout << "hello from finalizer " << std::endl;
 			m_obj->run();
 		}
 		void set_object(object* a_obj) {
@@ -189,7 +289,7 @@ private:
 
 	void run() {
 		m_thread = std::thread(&object::action, this);
-		startup();
+		startup(); // TODO call non-blocking?
 	}
 
 	outer_func<object, void> startup { this, &object::i_startup };
