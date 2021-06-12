@@ -41,18 +41,24 @@ public:
 
 	//--------------------------------------------------------------------------
 	//
-	T get() {
+	bool get(T& a_item, bool a_wait = true) {
 		// critical section
 		std::unique_lock<std::mutex> lock(m_mutex);
+		// handle poll
+		if (!a_wait && m_items.empty()) {
+			// empty
+			return false;
+		}
 		// wait until not empty
 		// lock is atomically released while doing so
 		while (m_items.empty()) {
 			m_cond.wait(lock);
 		}
 		// take item from queue
-		T item = std::move(m_items.front());
+		a_item = std::move(m_items.front());
 		m_items.pop();
-		return item;
+		// success
+		return true;
 	}	
 
 // protected members

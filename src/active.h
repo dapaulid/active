@@ -119,7 +119,17 @@ public:
 		);
 		// add it to our queue for execution
 		m_obj->enqueue(call);
-	}	
+	}
+
+	// TODO perfect forwarding??? issues with string conversion
+	void call_and_forget(Args... args) {
+		// create pending call 
+		command* call = new faf_command(
+			m_func, std::make_tuple(m_obj, args...)
+		);
+		// add it to our queue for execution
+		m_obj->enqueue(call);
+	}		
 
 protected:
 	// helper class for pending call
@@ -185,12 +195,25 @@ protected:
 	private:
 		Ret m_result;	
 		callback<F> m_callback;
-	};	
+	};
+
+	// helper class for "fire and forget" call
+	class faf_command: public command {
+	public:
+		faf_command(inner_func a_func, std::tuple<Object*, Args...> a_args):
+			m_func(a_func), m_args(a_args) {}
+		virtual void execute() override {
+			(void) std::apply(m_func, m_args);
+			delete this;
+		}
+	private:
+		inner_func m_func;	
+		std::tuple<Object*, Args...> m_args;
+	};		
 
 protected:
 	Object* m_obj;
 	inner_func m_func;
-
 };
 
 //------------------------------------------------------------------------------
@@ -218,9 +241,16 @@ public:
 		// constructor completes
 		a_finalizer.set_object(this);
 	}
-	~object() {
+	virtual ~object() {
 		shutdown();
-		m_thread.join();
+	}
+
+	void shutdown() {
+		if (m_thread.joinable()) {
+			std::cout << "requesting shutdown" << std::endl;
+			do_shutdown();
+			m_thread.join();
+		}
 	}
 
 	void enqueue(command* a_cmd) {
@@ -229,10 +259,12 @@ public:
 
 protected:
 	virtual void i_startup() {
+		std::cout << "startup" << std::endl;
 		m_is_active = true;
 	}
 
 	virtual void i_shutdown() {
+		std::cout << "shutdown" << std::endl;
 		m_is_active = false;
 	}
 
@@ -257,19 +289,24 @@ protected:
 
 private:
 	void action() {
-		do {
-			command* cmd = m_queue.get();
+		command* cmd = nullptr;
+		// process commands until shutdown requested AND queue is empty
+		while (m_queue.get(cmd, m_is_active)) {
 			cmd->execute();
-		} while (m_is_active);
+		}
 	}
-
+public:
 	void run() {
+		// enqueue startup message
+		do_startup.call_and_forget();
+		// start thread
+		// this must come after startup, to make sure
+		// there's a message in the queue
 		m_thread = std::thread(&object::action, this);
-		startup(); // TODO call non-blocking?
 	}
 
-	outer_func<object, void> startup { this, &object::i_startup };
-	outer_func<object, void> shutdown { this, &object::i_shutdown };
+	outer_func<object, void> do_startup { this, &object::i_startup };
+	outer_func<object, void> do_shutdown { this, &object::i_shutdown };
 
 protected:
 	shared_queue<command*> m_queue;

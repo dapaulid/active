@@ -49,12 +49,15 @@ protected:
 
 class Main: public active::object {
 	using super = active::object;
-	
+
 public:
 	Main(finalizer& a_finalizer = finalizer())
 		: super(a_finalizer)
 	{
 		sync_cout() << "hello from Main" << std::endl;
+	}
+	virtual ~Main() {
+		shutdown();
 	}
 
 protected:
@@ -90,6 +93,5 @@ protected:
 int main() {
 	
 	Main main;
-
 	return 0;
 }
