@@ -108,6 +108,12 @@ struct Hansli {
 size_t Hansli::ctor_cnt = 0;
 size_t Hansli::dtor_cnt = 0;
 
+class Handler {
+ public:
+	void myHandler(int a, int b, double c) {
+		sync_cout() << "myHandler: " << a << ' ' << b << ' ' << c << std::endl;
+	}
+};
 
 int main() {
 	
@@ -116,12 +122,19 @@ int main() {
 	int foo = 1234;
 	q.put(foo);
 	q.put((double)0.5);
-	q.put(Hansli());
+	//q.put(Hansli());
 	sync_cout() << q.get<int>() << ' ' << q.get<double>() << std::endl;
 
-	q.get<Hansli>();
-	sync_cout() << Hansli::ctor_cnt << ' ' << Hansli::dtor_cnt << std::endl;
+	//sync_cout() << Hansli::ctor_cnt << ' ' << Hansli::dtor_cnt << std::endl;
+	//q.get<Hansli>();
+	//sync_cout() << Hansli::ctor_cnt << ' ' << Hansli::dtor_cnt << std::endl;
 
+	Handler handler;
+	EventFunc<Handler, int, int, double> event(&q, &handler, &Handler::myHandler);
+	// put a new call into the queue
+	event(111, 222, 3.5);
+	// execute enqueued call
+	q.process();
 
 	return 0;
 }
