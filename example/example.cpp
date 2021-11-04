@@ -2,6 +2,7 @@
 #include <sstream>
 
 #include "../src/active.h"
+#include "../src/call_queue.h"
 
 // helper class to synchronize output to stdout
 struct sync_cout: public std::ostringstream {
@@ -90,8 +91,37 @@ protected:
 	}
 };
 
+struct Hansli {
+	Hansli() {
+		ctor_cnt++;
+	}
+	Hansli(const Hansli& other) {
+		ctor_cnt++;
+	}
+
+	~Hansli() {
+		dtor_cnt++;
+	}
+	static size_t ctor_cnt;
+	static size_t dtor_cnt;
+};
+size_t Hansli::ctor_cnt = 0;
+size_t Hansli::dtor_cnt = 0;
+
+
 int main() {
 	
-	Main main;
+	//Main main;
+	call_queue q;
+	int foo = 1234;
+	q.put(foo);
+	q.put((double)0.5);
+	q.put(Hansli());
+	sync_cout() << q.get<int>() << ' ' << q.get<double>() << std::endl;
+
+	q.get<Hansli>();
+	sync_cout() << Hansli::ctor_cnt << ' ' << Hansli::dtor_cnt << std::endl;
+
+
 	return 0;
 }
